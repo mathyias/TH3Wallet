@@ -59,3 +59,5 @@ button { width: 100%; background: var(--neon); color: #000; border: none; paddin
   animation: fadeIn 0.3s;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+
