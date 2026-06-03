@@ -16,6 +16,8 @@ function App() {
   const [view, setView] = useState<'login' | 'create-show' | 'import-input' | 'set-pass'>('login')
   const [error, setError] = useState('') // Stan błędu
 
+  
+
   // Funkcja pomocnicza do błędów
   const showErr = (msg: string) => { setError(msg); setTimeout(() => setError(''), 3000); }
 
@@ -100,11 +102,42 @@ function App() {
               <span className={activeTab === 'sec' ? 'active' : ''} onClick={() => setActiveTab('sec')}>Security</span>
             </div>
             {activeTab === 'wallet' && (
-              <table className="data-table"><tbody>
-                <tr><td className="label">ADDR</td><td className="value">{address}</td></tr>
-                <tr><td className="label">BAL</td><td className="value">{balance} TH3</td></tr>
-              </tbody></table>
-            )}
+  <>
+    <div className="balance-card">
+      <div className="balance-label">
+        Available Balance
+      </div>
+
+      <div className="balance-value">
+        {Number(balance).toFixed(8)}
+      </div>
+
+      <div className="balance-unit">
+        TH3
+      </div>
+    </div>
+
+    <div className="wallet-address">
+      <div className="wallet-address-label">
+        Wallet Address
+      </div>
+
+      <div className="wallet-address-row">
+        <span title={address}>
+          {address}
+        </span>
+
+        <button
+          type="button"
+          className="copy-btn"
+          onClick={() => navigator.clipboard.writeText(address)}
+        >
+          📋
+        </button>
+      </div>
+    </div>
+  </>
+)}
             {activeTab === 'txs' && <div className="scroll-area">{txs.map((t, i) => <div key={i} className="tx-item">{t} TH3</div>)}</div>}
             {activeTab === 'sec' && <div className="seed-box">{seed}</div>}
             <button className="reset-btn" onClick={() => {localStorage.clear(); window.location.reload()}}>Delete Wallet</button>
