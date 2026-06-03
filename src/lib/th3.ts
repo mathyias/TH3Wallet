@@ -14,7 +14,7 @@ const TH3_DERIVATION_PATH = "m/44'/175'/0'/0/0"
 const COIN = 100000000
 const SIGHASH_ALL = 0x01
 
-const DEFAULT_FEE_SATS = 100000
+const DEFAULT_FEE_SATS = 1000000
 const DUST_SATS = 1000
 
 type TH3Utxo = {
