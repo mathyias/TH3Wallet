@@ -504,3 +504,13 @@ font-size:24px;
 .theme-active{
   outline:2px solid var(--neon);
 }
+
+.success-msg {
+  background: rgba(0,255,120,.15);
+  border: 1px solid rgba(0,255,120,.4);
+  color: #00ff88;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  text-align: center;
+}

@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { generateTH3Address } from './lib/th3'
 import * as bip39 from 'bip39'
 import CryptoJS from 'crypto-js'
+import { QRCode } from 'react-qr-code'
 import './App.css'
+
 
 function App() {
   const [activeTab, setActiveTab] = useState('wallet')
@@ -15,6 +17,7 @@ function App() {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [view, setView] = useState<'login' | 'create-show' | 'import-input' | 'set-pass'>('login')
   const [error, setError] = useState('') // Stan błędu
+  const [success, setSuccess] = useState('')
   const [sendTo, setSendTo] = useState('')
   const [sendAmount, setSendAmount] = useState('')
 
@@ -22,6 +25,11 @@ function App() {
 
   // Funkcja pomocnicza do błędów
   const showErr = (msg: string) => { setError(msg); setTimeout(() => setError(''), 3000); }
+
+  const showSuccess = (msg: string) => {
+  setSuccess(msg)
+  setTimeout(() => setSuccess(''), 4000)
+}
 
   useEffect(() => {
     if (address && isUnlocked) {
@@ -71,9 +79,18 @@ function App() {
 
   const sendTH3 = async () => {
   try {
+    
     if (!sendTo.startsWith('T')) {
       return showErr('Invalid TH3 address')
     }
+
+    if (Number(sendAmount) <= 0) {
+  return showErr('Invalid amount')
+}
+
+if (Number(sendAmount) > balance) {
+  return showErr('Insufficient balance')
+}
 
     const response = await fetch(
       'https://api.th3chain.cloud/api/send',
@@ -95,7 +112,7 @@ function App() {
       return showErr(data.error)
     }
 
-    alert(`Transaction sent!\n${data.txid}`)
+    showSuccess('Transaction sent successfully')
 
     setSendTo('')
     setSendAmount('')
@@ -111,6 +128,12 @@ function App() {
         <header><h1>TH3 Wallet</h1></header>
         
         {error && <div className="error-msg">{error}</div>}
+
+        {success && (
+  <div className="success-msg">
+    {success}
+  </div>
+)}
 
         {!isUnlocked ? (
           <div>
@@ -179,6 +202,27 @@ function App() {
       <div className="wallet-address-label">
         Wallet Address
       </div>
+      
+       <div
+    style={{
+      marginTop: 20,
+      display: 'flex',
+      justifyContent: 'center'
+    }}
+  >
+    <div
+      style={{
+        background: '#fff',
+        padding: 12,
+        borderRadius: 16
+      }}
+    >
+      <QRCode
+        value={address}
+        size={150}
+      />
+    </div>
+  </div>   
 
       <div className="wallet-address-row">
         <span title={address}>
@@ -193,6 +237,9 @@ function App() {
           📋
         </button>
       </div>
+
+              
+
     </div>
   </>
 )}
