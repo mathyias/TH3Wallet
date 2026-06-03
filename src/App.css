@@ -321,6 +321,11 @@ button:active{
 transform:scale(.98);
 }
 
+button:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
 .reset-btn{
 margin-top:20px;
 
