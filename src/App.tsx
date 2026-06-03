@@ -31,26 +31,52 @@ function App() {
   setTimeout(() => setSuccess(''), 4000)
 }
 
-  useEffect(() => {
-    if (address && isUnlocked) {
-      fetch(`https://api.th3chain.cloud/api/address/${address}`).then(r => r.json()).then(d => setBalance(d.balance || 0)).catch(console.error)
-      fetch(`https://api.th3chain.cloud/api/address/${address}/txs`)
-  .then(r => r.json())
-  .then(async (ids) => {
-    if (!Array.isArray(ids)) return
+useEffect(() => {
+  if (!address || !isUnlocked) return
 
-    const details = await Promise.all(
-      ids.map((txid: string) =>
-        fetch(
-          `https://api.th3chain.cloud/api/tx/${txid}`
-        ).then(r => r.json())
+  const loadWallet = async () => {
+    try {
+      const balanceRes = await fetch(
+        `https://api.th3chain.cloud/api/address/${address}`
       )
-    )
 
-    setTxs(details)
-  })
+      const balanceData = await balanceRes.json()
+
+      setBalance(balanceData.balance || 0)
+
+      const txsRes = await fetch(
+        `https://api.th3chain.cloud/api/address/${address}/txs`
+      )
+
+      const ids = await txsRes.json()
+
+      if (!Array.isArray(ids)) return
+
+      const details = await Promise.all(
+        ids.map((txid: string) =>
+          fetch(
+            `https://api.th3chain.cloud/api/tx/${txid}`
+          ).then(r => r.json())
+        )
+      )
+
+      setTxs(details)
+
+    } catch (e) {
+      console.error(e)
     }
-  }, [address, isUnlocked])
+  }
+
+  loadWallet()
+
+  const interval = setInterval(
+    loadWallet,
+    10000
+  )
+
+  return () => clearInterval(interval)
+
+}, [address, isUnlocked])
 
   const finalizeSetup = async () => {
     if (password.length < 6) return showErr("Hasło min. 6 znaków!")
@@ -326,13 +352,25 @@ if (Number(sendAmount) > balance) {
           </div>
 
           <div
+  style={{
+    fontSize: '10px',
+    opacity: 0.6
+  }}
+>
+  {new Date(
+    tx.time * 1000
+  ).toLocaleString()}
+</div>
+
+          <div
             style={{
               fontSize: '10px',
               opacity: 0.5,
               wordBreak: 'break-all'
             }}
           >
-            {tx.txid}
+            {tx.txid.slice(0,12)}...
+            {tx.txid.slice(-8)}
           </div>
         </div>
       ))
@@ -340,7 +378,7 @@ if (Number(sendAmount) > balance) {
   </div>
 )}
             {activeTab === 'sec' && <div className="seed-box">{seed}</div>}
-            <button className="reset-btn" onClick={() => {localStorage.clear(); window.location.reload()}}>Delete Wallet</button>
+            <button className="reset-btn" onClick={() => {localStorage.clear()}}>Delete Wallet</button>
           </div>
         )}
       </div>
