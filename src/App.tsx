@@ -5,6 +5,9 @@ import CryptoJS from 'crypto-js'
 import { QRCode } from 'react-qr-code'
 import './App.css'
 
+const TX_FEE_TH3 = 0.01
+const EXPLORER_TX_BASE = 'https://explorer.th3chain.cloud/tx'
+
 function App() {
   const [activeTab, setActiveTab] = useState('wallet')
   const [address, setAddress] = useState(localStorage.getItem('th3_address') || '')
@@ -20,15 +23,21 @@ function App() {
   const [sendTo, setSendTo] = useState('')
   const [sendAmount, setSendAmount] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [lastTxid, setLastTxid] = useState('')
+  const [showSeed, setShowSeed] = useState(false)
+
+  const amount = Number(sendAmount)
+  const maxSend = Math.max(balance - TX_FEE_TH3, 0)
+  const totalSendCost = Number.isFinite(amount) && amount > 0 ? amount + TX_FEE_TH3 : TX_FEE_TH3
 
   const showErr = (msg: string) => {
     setError(msg)
-    setTimeout(() => setError(''), 4000)
+    setTimeout(() => setError(''), 5000)
   }
 
   const showSuccess = (msg: string) => {
     setSuccess(msg)
-    setTimeout(() => setSuccess(''), 6000)
+    setTimeout(() => setSuccess(''), 8000)
   }
 
   const loadWallet = async () => {
@@ -58,7 +67,7 @@ function App() {
         )
       )
 
-      setTxs(details)
+      setTxs(details.reverse())
     } catch (e) {
       console.error(e)
     }
@@ -120,6 +129,10 @@ function App() {
     }
   }
 
+  const useMaxAmount = () => {
+    setSendAmount(maxSend.toFixed(8))
+  }
+
   const sendTH3 = async () => {
     try {
       if (isSending) return
@@ -132,17 +145,16 @@ function App() {
         return showErr('Invalid TH3 address')
       }
 
-      const amount = Number(sendAmount)
-
       if (!Number.isFinite(amount) || amount <= 0) {
         return showErr('Invalid amount')
       }
 
-      if (amount > balance) {
-        return showErr('Insufficient balance')
+      if (amount + TX_FEE_TH3 > balance) {
+        return showErr(`Insufficient balance. Max send is ${maxSend.toFixed(8)} TH3`)
       }
 
       setIsSending(true)
+      setLastTxid('')
 
       const result = await sendTH3Transaction({
         seed,
@@ -151,6 +163,7 @@ function App() {
         amount
       })
 
+      setLastTxid(result.txid)
       showSuccess(`Transaction sent: ${result.txid.slice(0, 12)}...${result.txid.slice(-8)}`)
 
       setSendTo('')
@@ -180,6 +193,17 @@ function App() {
         {success && (
           <div className="success-msg">
             {success}
+            {lastTxid && (
+              <div style={{ marginTop: 8 }}>
+                <a
+                  href={`${EXPLORER_TX_BASE}/${lastTxid}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View transaction
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -380,12 +404,29 @@ function App() {
                   onChange={(e) => setSendAmount(e.target.value)}
                 />
 
-                <button
-                  disabled={balance <= 0 || isSending}
-                  onClick={sendTH3}
-                >
-                  {isSending ? 'Sending...' : 'Send TH3'}
-                </button>
+<button
+  type="button"
+  onClick={useMaxAmount}
+  disabled={maxSend <= 0 || isSending}
+  style={{
+    marginTop: '8px',
+    background: 'rgba(255, 255, 255, 0.12)',
+    color: 'rgba(255, 255, 255, 0.82)',
+    border: '1px solid rgba(255, 255, 255, 0.18)'
+  }}
+>
+  Max {maxSend.toFixed(8)} TH3
+</button>
+
+<button
+  disabled={balance <= 0 || isSending}
+  onClick={sendTH3}
+  style={{
+    marginTop: '14px'
+  }}
+>
+  {isSending ? 'Sending...' : 'Send TH3'}
+</button>
 
                 <div
                   style={{
@@ -396,6 +437,30 @@ function App() {
                 >
                   Available Balance: {Number(balance).toFixed(8)} TH3
                 </div>
+
+                <div
+                  style={{
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    opacity: 0.7
+                  }}
+                >
+                  Network Fee: {TX_FEE_TH3.toFixed(8)} TH3
+                </div>
+
+<div
+  style={{
+    marginTop: '12px',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontSize: '12px'
+  }}
+>
+  Total: {totalSendCost.toFixed(8)} TH3
+</div>
 
                 {balance <= 0 && (
                   <div
@@ -454,6 +519,16 @@ function App() {
                       >
                         {tx.txid.slice(0, 12)}...{tx.txid.slice(-8)}
                       </div>
+
+                      <div style={{ marginTop: 6 }}>
+                        <a
+                          href={`${EXPLORER_TX_BASE}/${tx.txid}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View
+                        </a>
+                      </div>
                     </div>
                   ))
                 )}
@@ -461,9 +536,23 @@ function App() {
             )}
 
             {activeTab === 'sec' && (
-              <div className="seed-box">
-                {seed}
-              </div>
+              <>
+                {!showSeed ? (
+                  <button onClick={() => setShowSeed(true)}>
+                    Reveal Seed Phrase
+                  </button>
+                ) : (
+                  <>
+                    <div className="seed-box">
+                      {seed}
+                    </div>
+
+                    <button onClick={() => setShowSeed(false)}>
+                      Hide Seed Phrase
+                    </button>
+                  </>
+                )}
+              </>
             )}
 
             <button
