@@ -27,7 +27,7 @@ export async function generateTH3Address(
     1 + pubKeyHash.length
   )
 
-  payload[0] = 60
+  payload[0] = 65
 
   payload.set(pubKeyHash, 1)
 
