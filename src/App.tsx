@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-import { generateTH3Address } from './lib/th3'
+import { generateTH3Address, sendTH3Transaction } from './lib/th3'
 import * as bip39 from 'bip39'
 import CryptoJS from 'crypto-js'
 import { QRCode } from 'react-qr-code'
 import './App.css'
-
 
 function App() {
   const [activeTab, setActiveTab] = useState('wallet')
@@ -16,32 +15,31 @@ function App() {
   const [seed, setSeed] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [view, setView] = useState<'login' | 'create-show' | 'import-input' | 'set-pass'>('login')
-  const [error, setError] = useState('') // Stan błędu
+  const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [sendTo, setSendTo] = useState('')
   const [sendAmount, setSendAmount] = useState('')
+  const [isSending, setIsSending] = useState(false)
 
-  
-
-  // Funkcja pomocnicza do błędów
-  const showErr = (msg: string) => { setError(msg); setTimeout(() => setError(''), 3000); }
+  const showErr = (msg: string) => {
+    setError(msg)
+    setTimeout(() => setError(''), 4000)
+  }
 
   const showSuccess = (msg: string) => {
-  setSuccess(msg)
-  setTimeout(() => setSuccess(''), 4000)
-}
-
-useEffect(() => {
-  if (!address || !isUnlocked) return
+    setSuccess(msg)
+    setTimeout(() => setSuccess(''), 6000)
+  }
 
   const loadWallet = async () => {
+    if (!address || !isUnlocked) return
+
     try {
       const balanceRes = await fetch(
         `https://api.th3chain.cloud/api/address/${address}`
       )
 
       const balanceData = await balanceRes.json()
-
       setBalance(balanceData.balance || 0)
 
       const txsRes = await fetch(
@@ -56,143 +54,220 @@ useEffect(() => {
         ids.map((txid: string) =>
           fetch(
             `https://api.th3chain.cloud/api/tx/${txid}`
-          ).then(r => r.json())
+          ).then((r) => r.json())
         )
       )
 
       setTxs(details)
-
     } catch (e) {
       console.error(e)
     }
   }
 
-  loadWallet()
+  useEffect(() => {
+    if (!address || !isUnlocked) return
 
-  const interval = setInterval(
-    loadWallet,
-    10000
-  )
+    loadWallet()
 
-  return () => clearInterval(interval)
+    const interval = setInterval(
+      loadWallet,
+      10000
+    )
 
-}, [address, isUnlocked])
+    return () => clearInterval(interval)
+  }, [address, isUnlocked])
 
   const finalizeSetup = async () => {
-    if (password.length < 6) return showErr("Hasło min. 6 znaków!")
-    if (!tempSeed || tempSeed.split(' ').length < 12) return showErr("Błędna fraza!")
+    if (password.length < 6) {
+      return showErr('Password min. 6 characters')
+    }
+
+    if (!tempSeed || tempSeed.split(' ').length < 12) {
+      return showErr('Invalid seed phrase')
+    }
+
     try {
       const enc = CryptoJS.AES.encrypt(tempSeed, password).toString()
       const addr = await generateTH3Address(tempSeed)
+
       localStorage.setItem('th3_encrypted_seed', enc)
       localStorage.setItem('th3_address', addr)
-      setAddress(addr); setSeed(tempSeed); setIsUnlocked(true);
-    } catch { showErr("Błąd zapisu portfela") }
+
+      setAddress(addr)
+      setSeed(tempSeed)
+      setIsUnlocked(true)
+    } catch {
+      showErr('Wallet save failed')
+    }
   }
 
   const unlockWallet = () => {
     const enc = localStorage.getItem('th3_encrypted_seed')
+
     try {
       const bytes = CryptoJS.AES.decrypt(enc!, password)
       const decrypted = bytes.toString(CryptoJS.enc.Utf8)
-      if (decrypted) { setIsUnlocked(true); setSeed(decrypted); setPassword(''); }
-      else { showErr("Złe hasło!") }
-    } catch { showErr("Błąd odblokowania") }
 
-
-
+      if (decrypted) {
+        setIsUnlocked(true)
+        setSeed(decrypted)
+        setPassword('')
+      } else {
+        showErr('Wrong password')
+      }
+    } catch {
+      showErr('Unlock failed')
+    }
   }
 
   const sendTH3 = async () => {
-  try {
-    
-    if (!sendTo.startsWith('T')) {
-      return showErr('Invalid TH3 address')
-    }
+    try {
+      if (isSending) return
 
-    if (Number(sendAmount) <= 0) {
-  return showErr('Invalid amount')
-}
-
-if (Number(sendAmount) > balance) {
-  return showErr('Insufficient balance')
-}
-
-    const response = await fetch(
-      'https://api.th3chain.cloud/api/send',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          address: sendTo,
-          amount: Number(sendAmount)
-        })
+      if (!seed) {
+        return showErr('Wallet is locked')
       }
-    )
 
-    const data = await response.json()
+      if (!sendTo.startsWith('T')) {
+        return showErr('Invalid TH3 address')
+      }
 
-    if (data.error) {
-      return showErr(data.error)
+      const amount = Number(sendAmount)
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return showErr('Invalid amount')
+      }
+
+      if (amount > balance) {
+        return showErr('Insufficient balance')
+      }
+
+      setIsSending(true)
+
+      const result = await sendTH3Transaction({
+        seed,
+        fromAddress: address,
+        toAddress: sendTo,
+        amount
+      })
+
+      showSuccess(`Transaction sent: ${result.txid.slice(0, 12)}...${result.txid.slice(-8)}`)
+
+      setSendTo('')
+      setSendAmount('')
+
+      await loadWallet()
+    } catch (err) {
+      showErr(err instanceof Error ? err.message : 'Send failed')
+    } finally {
+      setIsSending(false)
     }
-
-    showSuccess('Transaction sent successfully')
-
-    setSendTo('')
-    setSendAmount('')
-
-  } catch (err) {
-    showErr('Send failed')
   }
-}
 
   return (
     <div className="app-wrapper">
       <div className="glass-box">
-        <header><h1>TH3 Wallet</h1></header>
-        
-        {error && <div className="error-msg">{error}</div>}
+        <header>
+          <h1>TH3 Wallet</h1>
+        </header>
+
+        {error && (
+          <div className="error-msg">
+            {error}
+          </div>
+        )}
 
         {success && (
-  <div className="success-msg">
-    {success}
-  </div>
-)}
+          <div className="success-msg">
+            {success}
+          </div>
+        )}
 
         {!isUnlocked ? (
           <div>
             {address ? (
               <>
-                <input type="password" placeholder="Wpisz hasło" onChange={(e) => setPassword(e.target.value)} />
-                <button onClick={unlockWallet}>Unlock</button>
+                <input
+                  type="password"
+                  placeholder="Enter password"
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button onClick={unlockWallet}>
+                  Unlock
+                </button>
               </>
             ) : (
               <>
                 {view === 'login' && (
                   <>
-                    <button onClick={() => {setTempSeed(bip39.generateMnemonic()); setView('create-show');}} style={{marginBottom:'10px'}}>Create</button>
-                    <button className="reset-btn" onClick={() => setView('import-input')}>Import</button>
+                    <button
+                      onClick={() => {
+                        setTempSeed(bip39.generateMnemonic())
+                        setView('create-show')
+                      }}
+                      style={{ marginBottom: '10px' }}
+                    >
+                      Create
+                    </button>
+
+                    <button
+                      className="reset-btn"
+                      onClick={() => setView('import-input')}
+                    >
+                      Import
+                    </button>
                   </>
                 )}
+
                 {view === 'create-show' && (
                   <>
-                    <p className="label">Zapisz frazę:</p>
-                    <div className="seed-box">{tempSeed}</div>
-                    <button onClick={() => setView('set-pass')} style={{marginTop:'15px'}}>Zapisano</button>
+                    <p className="label">
+                      Save your seed phrase:
+                    </p>
+
+                    <div className="seed-box">
+                      {tempSeed}
+                    </div>
+
+                    <button
+                      onClick={() => setView('set-pass')}
+                      style={{ marginTop: '15px' }}
+                    >
+                      Saved
+                    </button>
                   </>
                 )}
+
                 {view === 'import-input' && (
                   <>
-                    <input type="text" placeholder="Wklej frazę seed" onChange={(e) => setTempSeed(e.target.value)} />
-                    <button onClick={() => {if(!tempSeed) return showErr("Wpisz frazę!"); setView('set-pass');}}>Dalej</button>
+                    <input
+                      type="text"
+                      placeholder="Paste seed phrase"
+                      onChange={(e) => setTempSeed(e.target.value)}
+                    />
+
+                    <button
+                      onClick={() => {
+                        if (!tempSeed) return showErr('Enter seed phrase')
+                        setView('set-pass')
+                      }}
+                    >
+                      Next
+                    </button>
                   </>
                 )}
+
                 {view === 'set-pass' && (
                   <>
-                    <input type="password" placeholder="Ustaw hasło" onChange={(e) => setPassword(e.target.value)} />
-                    <button onClick={finalizeSetup}>Confirm</button>
+                    <input
+                      type="password"
+                      placeholder="Set password"
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+
+                    <button onClick={finalizeSetup}>
+                      Confirm
+                    </button>
                   </>
                 )}
               </>
@@ -201,188 +276,210 @@ if (Number(sendAmount) > balance) {
         ) : (
           <div>
             <div className="nav-bar">
+              <span
+                className={activeTab === 'send' ? 'active' : ''}
+                onClick={() => setActiveTab('send')}
+              >
+                Send
+              </span>
 
-              <span className={activeTab === 'send' ? 'active' : ''} onClick={() => setActiveTab('send')}>Send</span>
-              <span className={activeTab === 'wallet' ? 'active' : ''} onClick={() => setActiveTab('wallet')}>Wallet</span>
+              <span
+                className={activeTab === 'wallet' ? 'active' : ''}
+                onClick={() => setActiveTab('wallet')}
+              >
+                Wallet
+              </span>
 
-              <span className={activeTab === 'txs' ? 'active' : ''} onClick={() => setActiveTab('txs')}>History</span>
-              <span className={activeTab === 'sec' ? 'active' : ''} onClick={() => setActiveTab('sec')}>Security</span>
+              <span
+                className={activeTab === 'txs' ? 'active' : ''}
+                onClick={() => setActiveTab('txs')}
+              >
+                History
+              </span>
+
+              <span
+                className={activeTab === 'sec' ? 'active' : ''}
+                onClick={() => setActiveTab('sec')}
+              >
+                Security
+              </span>
             </div>
+
             {activeTab === 'wallet' && (
-  <>
-    <div className="balance-card">
-      <div className="balance-label">
-        Available Balance
-      </div>
+              <>
+                <div className="balance-card">
+                  <div className="balance-label">
+                    Available Balance
+                  </div>
 
-      <div className="balance-value">
-        {Number(balance).toFixed(8)}
-      </div>
+                  <div className="balance-value">
+                    {Number(balance).toFixed(8)}
+                  </div>
 
-      <div className="balance-unit">
-        TH3
-      </div>
-    </div>
+                  <div className="balance-unit">
+                    TH3
+                  </div>
+                </div>
 
-    <div className="wallet-address">
-      <div className="wallet-address-label">
-        Wallet Address
-      </div>
-      
-       <div
-    style={{
-      marginTop: 20,
-      display: 'flex',
-      justifyContent: 'center'
-    }}
-  >
-    <div
-      style={{
-        background: '#fff',
-        padding: 12,
-        borderRadius: 16
-      }}
-    >
-      <QRCode
-        value={address}
-        size={150}
-      />
-    </div>
-  </div>   
+                <div className="wallet-address">
+                  <div className="wallet-address-label">
+                    Wallet Address
+                  </div>
 
-      <div className="wallet-address-row">
-        <span title={address}>
-          {address}
-        </span>
+                  <div
+                    style={{
+                      marginTop: 20,
+                      display: 'flex',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: '#fff',
+                        padding: 12,
+                        borderRadius: 16
+                      }}
+                    >
+                      <QRCode
+                        value={address}
+                        size={150}
+                      />
+                    </div>
+                  </div>
 
-        <button
-          type="button"
-          className="copy-btn"
-          onClick={() => navigator.clipboard.writeText(address)}
-        >
-          📋
-        </button>
-      </div>
+                  <div className="wallet-address-row">
+                    <span title={address}>
+                      {address}
+                    </span>
 
-              
+                    <button
+                      type="button"
+                      className="copy-btn"
+                      onClick={() => navigator.clipboard.writeText(address)}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
-    </div>
-  </>
-)}
+            {activeTab === 'send' && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Recipient Address"
+                  value={sendTo}
+                  onChange={(e) => setSendTo(e.target.value)}
+                />
 
-{activeTab === 'send' && (
-  <>
-    <input
-      type="text"
-      placeholder="Recipient Address"
-      value={sendTo}
-      onChange={(e) => setSendTo(e.target.value)}
-    />
+                <input
+                  type="number"
+                  placeholder="Amount TH3"
+                  value={sendAmount}
+                  onChange={(e) => setSendAmount(e.target.value)}
+                />
 
-    <input
-      type="number"
-      placeholder="Amount TH3"
-      value={sendAmount}
-      onChange={(e) => setSendAmount(e.target.value)}
-    />
+                <button
+                  disabled={balance <= 0 || isSending}
+                  onClick={sendTH3}
+                >
+                  {isSending ? 'Sending...' : 'Send TH3'}
+                </button>
 
-  <button
-  disabled={balance <= 0}
-  onClick={sendTH3}
->
-  Send TH3
-</button>
+                <div
+                  style={{
+                    marginTop: '15px',
+                    fontSize: '12px',
+                    opacity: 0.7
+                  }}
+                >
+                  Available Balance: {Number(balance).toFixed(8)} TH3
+                </div>
 
-    <div
-      style={{
-        marginTop: '15px',
-        fontSize: '12px',
-        opacity: 0.7
-      }}
-    >
-      Available Balance:
-      {' '}
-      {Number(balance).toFixed(8)}
-      {' '}
-      TH3
-    </div>
-
-    {balance <= 0 && (
-  <div
-    style={{
-      marginTop: '10px',
-      fontSize: '12px',
-      opacity: 0.7
-    }}
-  >
-    Mining rewards are maturing.
-  </div>
-)}
-  </>
-)}
+                {balance <= 0 && (
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      fontSize: '12px',
+                      opacity: 0.7
+                    }}
+                  >
+                    Mining rewards are maturing.
+                  </div>
+                )}
+              </>
+            )}
 
             {activeTab === 'txs' && (
-  <div className="scroll-area">
-    {txs.length === 0 ? (
-      <div className="tx-item">
-        No transactions yet
-      </div>
-    ) : (
-      txs.map((tx, i) => (
-        <div
-          key={i}
-          className="tx-item"
-        >
-          <div>
-            +{
-              tx.vout?.[0]?.value ??
-              0
-            } TH3
-          </div>
+              <div className="scroll-area">
+                {txs.length === 0 ? (
+                  <div className="tx-item">
+                    No transactions yet
+                  </div>
+                ) : (
+                  txs.map((tx, i) => (
+                    <div
+                      key={i}
+                      className="tx-item"
+                    >
+                      <div>
+                        {tx.vout?.[0]?.value ?? 0} TH3
+                      </div>
 
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.7
-            }}
-          >
-            {tx.confirmations}
-            {' '}
-            confirmations
-          </div>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          opacity: 0.7
+                        }}
+                      >
+                        {tx.confirmations ?? 0} confirmations
+                      </div>
 
-          <div
-  style={{
-    fontSize: '10px',
-    opacity: 0.6
-  }}
->
-  {new Date(
-    tx.time * 1000
-  ).toLocaleString()}
-</div>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          opacity: 0.6
+                        }}
+                      >
+                        {tx.time ? new Date(tx.time * 1000).toLocaleString() : 'Pending'}
+                      </div>
 
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.5,
-              wordBreak: 'break-all'
-            }}
-          >
-            {tx.txid.slice(0,12)}...
-            {tx.txid.slice(-8)}
-          </div>
-        </div>
-      ))
-    )}
-  </div>
-)}
-            {activeTab === 'sec' && <div className="seed-box">{seed}</div>}
-            <button className="reset-btn" onClick={() => {localStorage.clear()}}>Delete Wallet</button>
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          opacity: 0.5,
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {tx.txid.slice(0, 12)}...{tx.txid.slice(-8)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'sec' && (
+              <div className="seed-box">
+                {seed}
+              </div>
+            )}
+
+            <button
+              className="reset-btn"
+              onClick={() => {
+                localStorage.clear()
+                window.location.reload()
+              }}
+            >
+              Delete Wallet
+            </button>
           </div>
         )}
       </div>
     </div>
   )
 }
+
 export default App
