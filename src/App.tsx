@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { generateTH3Address, sendTH3Transaction } from './lib/th3'
+import { generateTH3Address, sendTH3Transaction, getTH3WIF } from './lib/th3'
 import * as bip39 from 'bip39'
 import CryptoJS from 'crypto-js'
 import { QRCode } from 'react-qr-code'
@@ -542,6 +542,7 @@ function App() {
                     Reveal Seed Phrase
                   </button>
                 ) : (
+                  
                   <>
                     <div className="seed-box">
                       {seed}
