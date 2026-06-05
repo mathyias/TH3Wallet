@@ -98,7 +98,7 @@ h1 {
 
 .balance-card {
   margin-bottom: 20px;
-  padding: 22px 14px;
+  padding: 20px 10px;
   border-radius: 24px;
   background: linear-gradient(135deg, rgba(93,246,255,.12), rgba(255,255,255,.04));
   border: 1px solid rgba(255,255,255,.1);
@@ -112,14 +112,18 @@ h1 {
 }
 
 .balance-value {
-  font-size: clamp(20px, 5.6vw, 32px);
-  line-height: 1.08;
+  font-size: clamp(16px, 4.5vw, 28px);
+  line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.04em;
   color: var(--neon);
-  word-break: break-word;
-  overflow-wrap: anywhere;
+
+  width: 100%;
   max-width: 100%;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  text-align: center;
 }
 
 .balance-unit {
