@@ -23,6 +23,7 @@ function App() {
   const [sendTo, setSendTo] = useState('')
   const [sendAmount, setSendAmount] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [isLoadingTxs, setIsLoadingTxs] = useState(false)
   const [lastTxid, setLastTxid] = useState('')
   const [showSeed, setShowSeed] = useState(false)
 
@@ -45,164 +46,33 @@ function App() {
     return `${value.slice(0, 12)}...${value.slice(-8)}`
   }
 
-  const getVoutAddresses = (vout: any): string[] => {
-    const scriptPubKey = vout?.scriptPubKey
+  const getTxInfoForAddress = (tx: any) => {
+    const confirmations = Number(tx.confirmations || 0)
 
-    if (Array.isArray(scriptPubKey?.addresses)) {
-      return scriptPubKey.addresses
+    const directionMap: Record<string, string> = {
+      sent: 'Sent',
+      received: 'Received',
+      mining: 'Mining Reward',
+      immature_mining: 'Immature Mining Reward',
+      self: 'Self Transfer',
+      related: 'Related'
     }
 
-    if (typeof scriptPubKey?.address === 'string') {
-      return [scriptPubKey.address]
-    }
-
-    if (typeof vout?.address === 'string') {
-      return [vout.address]
-    }
-
-    return []
-  }
-
-  const getVinAddresses = (vin: any): string[] => {
-  if (!vin || vin.coinbase) return []
-
-  const scriptPubKey = vin.prevout?.scriptPubKey
-
-  if (Array.isArray(scriptPubKey?.addresses)) {
-    return scriptPubKey.addresses
-  }
-
-  if (typeof scriptPubKey?.address === 'string') {
-    return [scriptPubKey.address]
-  }
-
-  if (typeof vin.prevout?.address === 'string') {
-    return [vin.prevout.address]
-  }
-
-  return []
-}
-
-const getTxInfoForAddress = (tx: any) => {
-  const outputs = Array.isArray(tx.vout) ? tx.vout : []
-  const inputs = Array.isArray(tx.vin) ? tx.vin : []
-
-  const received = outputs.reduce((sum: number, vout: any) => {
-    const addresses = getVoutAddresses(vout)
-
-    return addresses.includes(address)
-      ? sum + Number(vout.value || 0)
-      : sum
-  }, 0)
-
-  const sentToOthers = outputs.reduce((sum: number, vout: any) => {
-    const addresses = getVoutAddresses(vout)
-
-    return addresses.includes(address)
-      ? sum
-      : sum + Number(vout.value || 0)
-  }, 0)
-
-  const inputFromMe = inputs.reduce((sum: number, vin: any) => {
-    const addresses = getVinAddresses(vin)
-
-    if (!addresses.includes(address)) return sum
-
-    return sum + Number(vin.prevout?.value || 0)
-  }, 0)
-
-  const isCoinbase = inputs.some((vin: any) => Boolean(vin.coinbase))
-  const confirmations = Number(tx.confirmations || 0)
-  const fee = inputFromMe > 0
-    ? Math.max(inputFromMe - received - sentToOthers, 0)
-    : 0
-
-  const isMiningMature = confirmations >= 100
-
-  if (isCoinbase && received > 0) {
     return {
-      direction: isMiningMature ? 'Mining Reward' : 'Immature Mining Reward',
-      displayAmount: received,
-      received,
-      sent: 0,
-      sentToOthers: 0,
-      fee: 0,
-      change: 0,
+      direction: directionMap[tx.type] || 'Related',
+      displayAmount: Number(tx.amount || 0),
+      received: Number(tx.received || 0),
+      sent: Number(tx.sentInput || 0),
+      sentToOthers: Number(tx.sentToOthers || 0),
+      fee: Number(tx.fee || 0),
+      change: Number(tx.change || 0),
       confirmations,
-      isPositive: true,
+      isPositive: Number(tx.amount || 0) >= 0,
       isConfirmed: confirmations > 0,
-      isMining: true,
-      isMiningMature
+      isMining: tx.type === 'mining' || tx.type === 'immature_mining',
+      isMiningMature: tx.type === 'mining'
     }
   }
-
-  if (inputFromMe > 0 && sentToOthers > 0) {
-    return {
-      direction: 'Sent',
-      displayAmount: -sentToOthers,
-      received,
-      sent: inputFromMe,
-      sentToOthers,
-      fee,
-      change: received,
-      confirmations,
-      isPositive: false,
-      isConfirmed: confirmations > 0,
-      isMining: false,
-      isMiningMature: false
-    }
-  }
-
-  if (inputFromMe > 0 && sentToOthers === 0) {
-    return {
-      direction: 'Self Transfer',
-      displayAmount: -fee,
-      received,
-      sent: inputFromMe,
-      sentToOthers,
-      fee,
-      change: received,
-      confirmations,
-      isPositive: false,
-      isConfirmed: confirmations > 0,
-      isMining: false,
-      isMiningMature: false
-    }
-  }
-
-  if (received > 0) {
-    return {
-      direction: 'Received',
-      displayAmount: received,
-      received,
-      sent: 0,
-      sentToOthers: 0,
-      fee: 0,
-      change: 0,
-      confirmations,
-      isPositive: true,
-      isConfirmed: confirmations > 0,
-      isMining: false,
-      isMiningMature: false
-    }
-  }
-
-  return {
-    direction: 'Related',
-    displayAmount: 0,
-    received,
-    sent: inputFromMe,
-    sentToOthers,
-    fee,
-    change: received,
-    confirmations,
-    isPositive: true,
-    isConfirmed: confirmations > 0,
-    isMining: false,
-    isMiningMature: false
-  }
-}
-
 
   const showErr = (msg: string) => {
     setError(msg)
@@ -214,10 +84,14 @@ const getTxInfoForAddress = (tx: any) => {
     setTimeout(() => setSuccess(''), 8000)
   }
 
-  const loadWallet = async () => {
+  const loadWallet = async (silent = false) => {
     if (!address || !isUnlocked) return
 
     try {
+      if (!silent) {
+        setIsLoadingTxs(true)
+      }
+
       const balanceRes = await fetch(
         `https://api.th3chain.cloud/api/address/${address}`
       )
@@ -225,62 +99,31 @@ const getTxInfoForAddress = (tx: any) => {
       const balanceData = await balanceRes.json()
       setBalance(balanceData.balance || 0)
 
-      const txsRes = await fetch(
-        `https://api.th3chain.cloud/api/address/${address}/txs`
+      const historyRes = await fetch(
+        `https://api.th3chain.cloud/api/address/${address}/history`
       )
 
-      const ids = await txsRes.json()
+      const historyData = await historyRes.json()
 
-      if (!Array.isArray(ids)) return
-
-      const details = await Promise.all(
-  ids.map(async (txid: string) => {
-    const tx = await fetch(
-      `https://api.th3chain.cloud/api/tx/${txid}`
-    ).then((r) => r.json())
-
-    if (Array.isArray(tx.vin)) {
-      tx.vin = await Promise.all(
-        tx.vin.map(async (vin: any) => {
-          if (!vin.txid || vin.coinbase) return vin
-
-          try {
-            const prevTx = await fetch(
-              `https://api.th3chain.cloud/api/tx/${vin.txid}`
-            ).then((r) => r.json())
-
-            const prevOut = prevTx.vout?.[vin.vout]
-
-            return {
-              ...vin,
-              prevout: prevOut
-            }
-          } catch {
-            return vin
-          }
-        })
-      )
-    }
-
-    return tx
-  })
-)
-
-setTxs(details.reverse())
-
-
+      if (Array.isArray(historyData)) {
+        setTxs(historyData)
+      }
     } catch (e) {
       console.error(e)
+    } finally {
+      if (!silent) {
+        setIsLoadingTxs(false)
+      }
     }
   }
 
   useEffect(() => {
     if (!address || !isUnlocked) return
 
-    loadWallet()
+    loadWallet(false)
 
     const interval = setInterval(
-      loadWallet,
+      () => loadWallet(true),
       10000
     )
 
@@ -370,7 +213,7 @@ setTxs(details.reverse())
       setSendTo('')
       setSendAmount('')
 
-      await loadWallet()
+      await loadWallet(true)
     } catch (err) {
       showErr(err instanceof Error ? err.message : 'Send failed')
     } finally {
@@ -605,72 +448,54 @@ setTxs(details.reverse())
                   onChange={(e) => setSendAmount(e.target.value)}
                 />
 
-<button
-  type="button"
-  onClick={useMaxAmount}
-  disabled={maxSend <= 0 || isSending}
-  style={{
-    marginTop: '8px',
-    background: 'rgba(255, 255, 255, 0.12)',
-    color: 'rgba(255, 255, 255, 0.82)',
-    border: '1px solid rgba(255, 255, 255, 0.18)'
-  }}
->
-  Max {formatTH3(maxSend)} TH3
-</button>
-
-<button
-  disabled={balance <= 0 || isSending}
-  onClick={sendTH3}
-  style={{
-    marginTop: '14px'
-  }}
->
-  {isSending ? 'Sending...' : 'Send TH3'}
-</button>
-
-                <div
+                <button
+                  type="button"
+                  onClick={useMaxAmount}
+                  disabled={maxSend <= 0 || isSending}
                   style={{
-                    marginTop: '15px',
-                    fontSize: '12px',
-                    opacity: 0.7
+                    marginTop: '8px',
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    color: 'rgba(255, 255, 255, 0.82)',
+                    border: '1px solid rgba(255, 255, 255, 0.18)'
                   }}
                 >
+                  Max {formatTH3(maxSend)} TH3
+                </button>
+
+                <button
+                  disabled={balance <= 0 || isSending}
+                  onClick={sendTH3}
+                  style={{
+                    marginTop: '14px'
+                  }}
+                >
+                  {isSending ? 'Sending...' : 'Send TH3'}
+                </button>
+
+                <div style={{ marginTop: '15px', fontSize: '12px', opacity: 0.7 }}>
                   Available Balance: {formatTH3(Number(balance))} TH3
                 </div>
 
-                <div
-                  style={{
-                    marginTop: '8px',
-                    fontSize: '12px',
-                    opacity: 0.7
-                  }}
-                >
+                <div style={{ marginTop: '8px', fontSize: '12px', opacity: 0.7 }}>
                   Network Fee: {formatTH3(TX_FEE_TH3)} TH3
                 </div>
 
-<div
-  style={{
-    marginTop: '12px',
-    padding: '10px 12px',
-    borderRadius: '10px',
-    background: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    color: 'rgba(255, 255, 255, 0.72)',
-    fontSize: '12px'
-  }}
->
-  Total: {formatTH3(totalSendCost)} TH3
-</div>
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: 'rgba(255, 255, 255, 0.72)',
+                    fontSize: '12px'
+                  }}
+                >
+                  Total: {formatTH3(totalSendCost)} TH3
+                </div>
 
                 {balance <= 0 && (
-                  <div
-                    style={{
-                      marginTop: '10px',
-                      fontSize: '12px',
-                      opacity: 0.7
-                    }}
-                  >
+                  <div style={{ marginTop: '10px', fontSize: '12px', opacity: 0.7 }}>
                     Mining rewards are maturing.
                   </div>
                 )}
@@ -679,7 +504,11 @@ setTxs(details.reverse())
 
             {activeTab === 'txs' && (
               <div className="scroll-area">
-                {txs.length === 0 ? (
+                {isLoadingTxs ? (
+                  <div className="tx-item">
+                    Loading transactions...
+                  </div>
+                ) : txs.length === 0 ? (
                   <div className="tx-item">
                     No transactions yet
                   </div>
@@ -689,7 +518,7 @@ setTxs(details.reverse())
 
                     return (
                       <div
-                        key={i}
+                        key={tx.txid || i}
                         className={`tx-item tx-item-modern ${txInfo.isPositive ? 'tx-positive' : 'tx-negative'}`}
                       >
                         <div className="tx-main-row">
@@ -710,32 +539,32 @@ setTxs(details.reverse())
                         </div>
 
                         <div className="tx-meta-row">
-  <span className={txInfo.isConfirmed ? 'tx-confirmed' : 'tx-pending'}>
-    {txInfo.isConfirmed ? 'Confirmed' : 'Pending'}
-  </span>
+                          <span className={txInfo.isConfirmed ? 'tx-confirmed' : 'tx-pending'}>
+                            {txInfo.isConfirmed ? 'Confirmed' : 'Pending'}
+                          </span>
 
-  <span>
-    {txInfo.confirmations} confirmations
-  </span>
+                          <span>
+                            {txInfo.confirmations} confirmations
+                          </span>
 
-  {txInfo.isMining && !txInfo.isMiningMature && (
-    <span>
-      Matures at 100 confirmations
-    </span>
-  )}
+                          {txInfo.isMining && !txInfo.isMiningMature && (
+                            <span>
+                              Matures at 100 confirmations
+                            </span>
+                          )}
 
-  {txInfo.fee > 0 && (
-    <span>
-      Fee {formatTH3(txInfo.fee)} TH3
-    </span>
-  )}
+                          {txInfo.fee > 0 && (
+                            <span>
+                              Fee {formatTH3(txInfo.fee)} TH3
+                            </span>
+                          )}
 
-  {txInfo.change > 0 && txInfo.direction === 'Sent' && (
-    <span>
-      Change {formatTH3(txInfo.change)} TH3
-    </span>
-  )}
-</div>
+                          {txInfo.change > 0 && txInfo.direction === 'Sent' && (
+                            <span>
+                              Change {formatTH3(txInfo.change)} TH3
+                            </span>
+                          )}
+                        </div>
 
                         <div className="tx-hash">
                           {shortHash(tx.txid)}
@@ -764,7 +593,6 @@ setTxs(details.reverse())
                     Reveal Seed Phrase
                   </button>
                 ) : (
-                  
                   <>
                     <div className="seed-box">
                       {seed}
