@@ -25,8 +25,12 @@ The seed phrase and private key stay in the browser. Transactions are built and 
 
 ## Build
 
+
 ```bash
-npm install
+nms install
 npm run build
-API dependency
+```
+
+## API dependency
+
 https://api.th3chain.cloud
