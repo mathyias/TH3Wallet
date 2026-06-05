@@ -100,7 +100,7 @@ function App() {
       setBalance(balanceData.balance || 0)
 
       const historyRes = await fetch(
-        `https://api.th3chain.cloud/api/address/${address}/history`
+        `https://api.th3chain.cloud/api/address/${address}/history?limit=50`
       )
 
       const historyData = await historyRes.json()
