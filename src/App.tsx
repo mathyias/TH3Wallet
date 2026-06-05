@@ -95,6 +95,14 @@ const getTxInfoForAddress = (tx: any) => {
       : sum
   }, 0)
 
+  const sentToOthers = outputs.reduce((sum: number, vout: any) => {
+    const addresses = getVoutAddresses(vout)
+
+    return addresses.includes(address)
+      ? sum
+      : sum + Number(vout.value || 0)
+  }, 0)
+
   const inputFromMe = inputs.reduce((sum: number, vin: any) => {
     const addresses = getVinAddresses(vin)
 
@@ -105,31 +113,93 @@ const getTxInfoForAddress = (tx: any) => {
 
   const isCoinbase = inputs.some((vin: any) => Boolean(vin.coinbase))
   const confirmations = Number(tx.confirmations || 0)
+  const fee = inputFromMe > 0
+    ? Math.max(inputFromMe - received - sentToOthers, 0)
+    : 0
 
-  const netAmount = received - inputFromMe
-
-  let direction = 'Related'
-  let displayAmount = netAmount
+  const isMiningMature = confirmations >= 100
 
   if (isCoinbase && received > 0) {
-    direction = 'Mining Reward'
-    displayAmount = received
-  } else if (netAmount < 0) {
-    direction = 'Sent'
-    displayAmount = netAmount
-  } else if (netAmount > 0) {
-    direction = 'Received'
-    displayAmount = netAmount
+    return {
+      direction: isMiningMature ? 'Mining Reward' : 'Immature Mining Reward',
+      displayAmount: received,
+      received,
+      sent: 0,
+      sentToOthers: 0,
+      fee: 0,
+      change: 0,
+      confirmations,
+      isPositive: true,
+      isConfirmed: confirmations > 0,
+      isMining: true,
+      isMiningMature
+    }
+  }
+
+  if (inputFromMe > 0 && sentToOthers > 0) {
+    return {
+      direction: 'Sent',
+      displayAmount: -sentToOthers,
+      received,
+      sent: inputFromMe,
+      sentToOthers,
+      fee,
+      change: received,
+      confirmations,
+      isPositive: false,
+      isConfirmed: confirmations > 0,
+      isMining: false,
+      isMiningMature: false
+    }
+  }
+
+  if (inputFromMe > 0 && sentToOthers === 0) {
+    return {
+      direction: 'Self Transfer',
+      displayAmount: -fee,
+      received,
+      sent: inputFromMe,
+      sentToOthers,
+      fee,
+      change: received,
+      confirmations,
+      isPositive: false,
+      isConfirmed: confirmations > 0,
+      isMining: false,
+      isMiningMature: false
+    }
+  }
+
+  if (received > 0) {
+    return {
+      direction: 'Received',
+      displayAmount: received,
+      received,
+      sent: 0,
+      sentToOthers: 0,
+      fee: 0,
+      change: 0,
+      confirmations,
+      isPositive: true,
+      isConfirmed: confirmations > 0,
+      isMining: false,
+      isMiningMature: false
+    }
   }
 
   return {
-    direction,
-    displayAmount,
+    direction: 'Related',
+    displayAmount: 0,
     received,
     sent: inputFromMe,
+    sentToOthers,
+    fee,
+    change: received,
     confirmations,
-    isPositive: displayAmount >= 0,
-    isConfirmed: confirmations > 0
+    isPositive: true,
+    isConfirmed: confirmations > 0,
+    isMining: false,
+    isMiningMature: false
   }
 }
 
@@ -640,14 +710,32 @@ setTxs(details.reverse())
                         </div>
 
                         <div className="tx-meta-row">
-                          <span className={txInfo.isConfirmed ? 'tx-confirmed' : 'tx-pending'}>
-                            {txInfo.isConfirmed ? 'Confirmed' : 'Pending'}
-                          </span>
+  <span className={txInfo.isConfirmed ? 'tx-confirmed' : 'tx-pending'}>
+    {txInfo.isConfirmed ? 'Confirmed' : 'Pending'}
+  </span>
 
-                          <span>
-                            {txInfo.confirmations} confirmations
-                          </span>
-                        </div>
+  <span>
+    {txInfo.confirmations} confirmations
+  </span>
+
+  {txInfo.isMining && !txInfo.isMiningMature && (
+    <span>
+      Matures at 100 confirmations
+    </span>
+  )}
+
+  {txInfo.fee > 0 && (
+    <span>
+      Fee {formatTH3(txInfo.fee)} TH3
+    </span>
+  )}
+
+  {txInfo.change > 0 && txInfo.direction === 'Sent' && (
+    <span>
+      Change {formatTH3(txInfo.change)} TH3
+    </span>
+  )}
+</div>
 
                         <div className="tx-hash">
                           {shortHash(tx.txid)}
