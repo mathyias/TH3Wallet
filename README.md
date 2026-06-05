@@ -27,7 +27,7 @@ The seed phrase and private key stay in the browser. Transactions are built and 
 
 
 ```bash
-nms install
+npm install
 npm run build
 ```
 
