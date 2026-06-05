@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { generateTH3Address, sendTH3Transaction, getTH3WIF } from './lib/th3'
+import { generateTH3Address, sendTH3Transaction } from './lib/th3'
 import * as bip39 from 'bip39'
 import CryptoJS from 'crypto-js'
 import { QRCode } from 'react-qr-code'
@@ -29,6 +29,110 @@ function App() {
   const amount = Number(sendAmount)
   const maxSend = Math.max(balance - TX_FEE_TH3, 0)
   const totalSendCost = Number.isFinite(amount) && amount > 0 ? amount + TX_FEE_TH3 : TX_FEE_TH3
+
+  const formatTH3 = (value: number, maxDecimals = 8) => {
+    const safeValue = Number.isFinite(value) ? value : 0
+
+    return safeValue.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: maxDecimals
+    })
+  }
+
+  const shortHash = (value?: string) => {
+    if (!value) return ''
+    if (value.length <= 20) return value
+    return `${value.slice(0, 12)}...${value.slice(-8)}`
+  }
+
+  const getVoutAddresses = (vout: any): string[] => {
+    const scriptPubKey = vout?.scriptPubKey
+
+    if (Array.isArray(scriptPubKey?.addresses)) {
+      return scriptPubKey.addresses
+    }
+
+    if (typeof scriptPubKey?.address === 'string') {
+      return [scriptPubKey.address]
+    }
+
+    if (typeof vout?.address === 'string') {
+      return [vout.address]
+    }
+
+    return []
+  }
+
+  const getVinAddresses = (vin: any): string[] => {
+  if (!vin || vin.coinbase) return []
+
+  const scriptPubKey = vin.prevout?.scriptPubKey
+
+  if (Array.isArray(scriptPubKey?.addresses)) {
+    return scriptPubKey.addresses
+  }
+
+  if (typeof scriptPubKey?.address === 'string') {
+    return [scriptPubKey.address]
+  }
+
+  if (typeof vin.prevout?.address === 'string') {
+    return [vin.prevout.address]
+  }
+
+  return []
+}
+
+const getTxInfoForAddress = (tx: any) => {
+  const outputs = Array.isArray(tx.vout) ? tx.vout : []
+  const inputs = Array.isArray(tx.vin) ? tx.vin : []
+
+  const received = outputs.reduce((sum: number, vout: any) => {
+    const addresses = getVoutAddresses(vout)
+
+    return addresses.includes(address)
+      ? sum + Number(vout.value || 0)
+      : sum
+  }, 0)
+
+  const inputFromMe = inputs.reduce((sum: number, vin: any) => {
+    const addresses = getVinAddresses(vin)
+
+    if (!addresses.includes(address)) return sum
+
+    return sum + Number(vin.prevout?.value || 0)
+  }, 0)
+
+  const isCoinbase = inputs.some((vin: any) => Boolean(vin.coinbase))
+  const confirmations = Number(tx.confirmations || 0)
+
+  const netAmount = received - inputFromMe
+
+  let direction = 'Related'
+  let displayAmount = netAmount
+
+  if (isCoinbase && received > 0) {
+    direction = 'Mining Reward'
+    displayAmount = received
+  } else if (netAmount < 0) {
+    direction = 'Sent'
+    displayAmount = netAmount
+  } else if (netAmount > 0) {
+    direction = 'Received'
+    displayAmount = netAmount
+  }
+
+  return {
+    direction,
+    displayAmount,
+    received,
+    sent: inputFromMe,
+    confirmations,
+    isPositive: displayAmount >= 0,
+    isConfirmed: confirmations > 0
+  }
+}
+
 
   const showErr = (msg: string) => {
     setError(msg)
@@ -60,14 +164,41 @@ function App() {
       if (!Array.isArray(ids)) return
 
       const details = await Promise.all(
-        ids.map((txid: string) =>
-          fetch(
-            `https://api.th3chain.cloud/api/tx/${txid}`
-          ).then((r) => r.json())
-        )
-      )
+  ids.map(async (txid: string) => {
+    const tx = await fetch(
+      `https://api.th3chain.cloud/api/tx/${txid}`
+    ).then((r) => r.json())
 
-      setTxs(details.reverse())
+    if (Array.isArray(tx.vin)) {
+      tx.vin = await Promise.all(
+        tx.vin.map(async (vin: any) => {
+          if (!vin.txid || vin.coinbase) return vin
+
+          try {
+            const prevTx = await fetch(
+              `https://api.th3chain.cloud/api/tx/${vin.txid}`
+            ).then((r) => r.json())
+
+            const prevOut = prevTx.vout?.[vin.vout]
+
+            return {
+              ...vin,
+              prevout: prevOut
+            }
+          } catch {
+            return vin
+          }
+        })
+      )
+    }
+
+    return tx
+  })
+)
+
+setTxs(details.reverse())
+
+
     } catch (e) {
       console.error(e)
     }
@@ -150,7 +281,7 @@ function App() {
       }
 
       if (amount + TX_FEE_TH3 > balance) {
-        return showErr(`Insufficient balance. Max send is ${maxSend.toFixed(8)} TH3`)
+        return showErr(`Insufficient balance. Max send is ${formatTH3(maxSend)} TH3`)
       }
 
       setIsSending(true)
@@ -337,7 +468,7 @@ function App() {
                   </div>
 
                   <div className="balance-value">
-                    {Number(balance).toFixed(8)}
+                    {formatTH3(Number(balance))}
                   </div>
 
                   <div className="balance-unit">
@@ -415,7 +546,7 @@ function App() {
     border: '1px solid rgba(255, 255, 255, 0.18)'
   }}
 >
-  Max {maxSend.toFixed(8)} TH3
+  Max {formatTH3(maxSend)} TH3
 </button>
 
 <button
@@ -435,7 +566,7 @@ function App() {
                     opacity: 0.7
                   }}
                 >
-                  Available Balance: {Number(balance).toFixed(8)} TH3
+                  Available Balance: {formatTH3(Number(balance))} TH3
                 </div>
 
                 <div
@@ -445,7 +576,7 @@ function App() {
                     opacity: 0.7
                   }}
                 >
-                  Network Fee: {TX_FEE_TH3.toFixed(8)} TH3
+                  Network Fee: {formatTH3(TX_FEE_TH3)} TH3
                 </div>
 
 <div
@@ -459,7 +590,7 @@ function App() {
     fontSize: '12px'
   }}
 >
-  Total: {totalSendCost.toFixed(8)} TH3
+  Total: {formatTH3(totalSendCost)} TH3
 </div>
 
                 {balance <= 0 && (
@@ -483,54 +614,57 @@ function App() {
                     No transactions yet
                   </div>
                 ) : (
-                  txs.map((tx, i) => (
-                    <div
-                      key={i}
-                      className="tx-item"
-                    >
-                      <div>
-                        {tx.vout?.[0]?.value ?? 0} TH3
-                      </div>
+                  txs.map((tx, i) => {
+                    const txInfo = getTxInfoForAddress(tx)
 
+                    return (
                       <div
-                        style={{
-                          fontSize: '10px',
-                          opacity: 0.7
-                        }}
+                        key={i}
+                        className={`tx-item tx-item-modern ${txInfo.isPositive ? 'tx-positive' : 'tx-negative'}`}
                       >
-                        {tx.confirmations ?? 0} confirmations
-                      </div>
+                        <div className="tx-main-row">
+                          <div>
+                            <div className="tx-type">
+                              {txInfo.direction}
+                            </div>
 
-                      <div
-                        style={{
-                          fontSize: '10px',
-                          opacity: 0.6
-                        }}
-                      >
-                        {tx.time ? new Date(tx.time * 1000).toLocaleString() : 'Pending'}
-                      </div>
+                            <div className="tx-date">
+                              {tx.time ? new Date(tx.time * 1000).toLocaleString() : 'Pending'}
+                            </div>
+                          </div>
 
-                      <div
-                        style={{
-                          fontSize: '10px',
-                          opacity: 0.5,
-                          wordBreak: 'break-all'
-                        }}
-                      >
-                        {tx.txid.slice(0, 12)}...{tx.txid.slice(-8)}
-                      </div>
+                          <div className="tx-amount">
+                            {txInfo.isPositive ? '+' : '-'}
+                            {formatTH3(Math.abs(txInfo.displayAmount))} TH3
+                          </div>
+                        </div>
 
-                      <div style={{ marginTop: 6 }}>
-                        <a
-                          href={`${EXPLORER_TX_BASE}/${tx.txid}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View
-                        </a>
+                        <div className="tx-meta-row">
+                          <span className={txInfo.isConfirmed ? 'tx-confirmed' : 'tx-pending'}>
+                            {txInfo.isConfirmed ? 'Confirmed' : 'Pending'}
+                          </span>
+
+                          <span>
+                            {txInfo.confirmations} confirmations
+                          </span>
+                        </div>
+
+                        <div className="tx-hash">
+                          {shortHash(tx.txid)}
+                        </div>
+
+                        <div className="tx-actions">
+                          <a
+                            href={`${EXPLORER_TX_BASE}/${tx.txid}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View transaction
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             )}
