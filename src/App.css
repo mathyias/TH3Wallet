@@ -423,3 +423,33 @@ button:disabled {
     text-align: left;
   }
 }
+.wallet-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.wallet-brand img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 24px rgba(39, 232, 255, 0.22));
+}
+
+.wallet-brand span {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .wallet-brand {
+    gap: 10px;
+  }
+
+  .wallet-brand img {
+    width: 54px;
+    height: 54px;
+  }
+}

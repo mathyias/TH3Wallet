@@ -242,7 +242,10 @@ function App() {
     <div className="app-wrapper">
       <div className="glass-box">
         <header>
-          <h1>TH3 Wallet</h1>
+          <a className="wallet-brand" href="https://th3chain.cloud" aria-label="TH3Chain home">
+            <img src="/th3-logo.png" alt="TH3Chain" />
+            <span>TH3 Wallet</span>
+          </a>
         </header>
 
         {error && (
