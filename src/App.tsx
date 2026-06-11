@@ -244,7 +244,7 @@ function App() {
         <header>
           <div className="wallet-header-brand">
             <div className="wallet-logo-link" aria-hidden="true">
-              <img src="/th3-logo.png" alt="" />
+              <img src="/th3-logo.png?v=3" alt="" />
             </div>
             <h1>Wallet</h1>
           </div>

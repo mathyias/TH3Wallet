@@ -795,3 +795,26 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* Cache-safe final logo sizing */
+.wallet-logo-link {
+  width: 64px !important;
+  height: 64px !important;
+}
+
+.wallet-logo-link img {
+  width: 58px !important;
+  height: 58px !important;
+}
+
+@media (max-width: 640px) {
+  .wallet-logo-link {
+    width: 50px !important;
+    height: 50px !important;
+  }
+
+  .wallet-logo-link img {
+    width: 46px !important;
+    height: 46px !important;
+  }
+}
