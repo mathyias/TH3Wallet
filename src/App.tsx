@@ -7,9 +7,22 @@ import './App.css'
 
 const TX_FEE_TH3 = 0.01
 const EXPLORER_TX_BASE = 'https://explorer.th3chain.cloud/tx'
+const WALLET_URL = 'https://wallet.th3chain.cloud/'
+
+function getPaymentRequest() {
+  const params = new URLSearchParams(window.location.search)
+  const send = (params.get('send') || '').trim()
+  const amount = (params.get('amount') || '').trim()
+
+  return {
+    send: send.startsWith('TH3') ? send : '',
+    amount: Number(amount) > 0 ? amount : ''
+  }
+}
 
 function App() {
-  const [activeTab, setActiveTab] = useState('wallet')
+  const paymentRequest = getPaymentRequest()
+  const [activeTab, setActiveTab] = useState(paymentRequest.send ? 'send' : 'wallet')
   const [address, setAddress] = useState(localStorage.getItem('th3_address') || '')
   const [balance, setBalance] = useState(0)
   const [txs, setTxs] = useState<any[]>([])
@@ -20,12 +33,16 @@ function App() {
   const [view, setView] = useState<'login' | 'create-show' | 'import-input' | 'set-pass'>('login')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [sendTo, setSendTo] = useState('')
-  const [sendAmount, setSendAmount] = useState('')
+  const [sendTo, setSendTo] = useState(paymentRequest.send)
+  const [sendAmount, setSendAmount] = useState(paymentRequest.amount)
   const [isSending, setIsSending] = useState(false)
   const [isLoadingTxs, setIsLoadingTxs] = useState(false)
   const [lastTxid, setLastTxid] = useState('')
   const [showSeed, setShowSeed] = useState(false)
+
+  const receiveLink = address
+    ? `${WALLET_URL}?send=${encodeURIComponent(address)}`
+    : ''
 
   const amount = Number(sendAmount)
   const maxSend = Math.max(balance - TX_FEE_TH3, 0)
@@ -409,11 +426,24 @@ function App() {
                       }}
                     >
                       <QRCode
-                        value={address}
+                        value={receiveLink || address}
                         size={150}
                       />
                     </div>
                   </div>
+
+                  <p
+                    style={{
+                      marginTop: 12,
+                      marginBottom: 12,
+                      opacity: .58,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      textAlign: 'center'
+                    }}
+                  >
+                    Scan to open TH3 Wallet with this address prepared in Send.
+                  </p>
 
                   <div className="wallet-address-row">
                     <span title={address}>
