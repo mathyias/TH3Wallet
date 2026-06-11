@@ -239,13 +239,15 @@ function App() {
   }
 
   return (
-    <div className="app-wrapper">
+    <div className={`app-wrapper ${isUnlocked ? "wallet-screen" : "setup-screen"}`}>
       <div className="glass-box">
         <header>
-          <a className="wallet-brand" href="https://th3chain.cloud" aria-label="TH3Chain home">
-            <img src="/th3-logo.png" alt="TH3Chain" />
-            <span>Wallet</span>
-          </a>
+          <div className="wallet-header-brand">
+            <div className="wallet-logo-link" aria-hidden="true">
+              <img src="/th3-logo.png" alt="" />
+            </div>
+            <h1>Wallet</h1>
+          </div>
         </header>
 
         {error && (
@@ -279,6 +281,9 @@ function App() {
                   type="password"
                   placeholder="Enter password"
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') unlockWallet()
+                  }}
                 />
                 <button onClick={unlockWallet}>
                   Unlock
@@ -332,6 +337,12 @@ function App() {
                       type="text"
                       placeholder="Paste seed phrase"
                       onChange={(e) => setTempSeed(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (!tempSeed) return showErr('Enter seed phrase')
+                          setView('set-pass')
+                        }
+                      }}
                     />
 
                     <button
@@ -351,6 +362,9 @@ function App() {
                       type="password"
                       placeholder="Set password"
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') finalizeSetup()
+                      }}
                     />
 
                     <button onClick={finalizeSetup}>
@@ -651,6 +665,12 @@ function App() {
           </div>
         )}
       </div>
+
+      <footer className="wallet-footer">
+        <a className="wallet-footer-link" href="https://th3chain.cloud">
+          Back to main page
+        </a>
+      </footer>
     </div>
   )
 }
