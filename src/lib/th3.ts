@@ -7,7 +7,7 @@ import bs58check from 'bs58check'
 
 const API_BASE = 'https://api.th3chain.cloud/api'
 
-const TH3_PUBKEY_PREFIX = 65
+const TH3_PUBKEY_PREFIX = new Uint8Array([0xc2, 0x6a, 0xe5])
 const TH3_WIF_PREFIX = 128
 const TH3_DERIVATION_PATH = "m/44'/175'/0'/0/0"
 
@@ -183,11 +183,17 @@ function addressToPubKeyHash(address: string): Uint8Array {
   const decoded = bs58check.decode(address)
   const payload = asBytes(decoded)
 
-  if (payload.length !== 21 || payload[0] !== TH3_PUBKEY_PREFIX) {
+  if (payload.length !== TH3_PUBKEY_PREFIX.length + 20) {
     throw new Error('Invalid TH3 address')
   }
 
-  return payload.slice(1)
+  for (let i = 0; i < TH3_PUBKEY_PREFIX.length; i++) {
+    if (payload[i] !== TH3_PUBKEY_PREFIX[i]) {
+      throw new Error('Invalid TH3 address')
+    }
+  }
+
+  return payload.slice(TH3_PUBKEY_PREFIX.length)
 }
 
 function p2pkhScriptFromAddress(address: string): Uint8Array {
@@ -408,10 +414,10 @@ export async function generateTH3Address(
   }
 
   const pubKeyHash = hash160(child.publicKey)
-  const payload = new Uint8Array(1 + pubKeyHash.length)
+  const payload = new Uint8Array(TH3_PUBKEY_PREFIX.length + pubKeyHash.length)
 
-  payload[0] = TH3_PUBKEY_PREFIX
-  payload.set(pubKeyHash, 1)
+  payload.set(TH3_PUBKEY_PREFIX, 0)
+  payload.set(pubKeyHash, TH3_PUBKEY_PREFIX.length)
 
   return bs58check.encode(payload)
 }

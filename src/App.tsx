@@ -185,7 +185,7 @@ function App() {
         return showErr('Wallet is locked')
       }
 
-      if (!sendTo.startsWith('T')) {
+      if (!sendTo.startsWith('TH3')) {
         return showErr('Invalid TH3 address')
       }
 
