@@ -244,7 +244,7 @@ function App() {
         <header>
           <a className="wallet-brand" href="https://th3chain.cloud" aria-label="TH3Chain home">
             <img src="/th3-logo.png" alt="TH3Chain" />
-            <span>TH3 Wallet</span>
+            <span>Wallet</span>
           </a>
         </header>
 
