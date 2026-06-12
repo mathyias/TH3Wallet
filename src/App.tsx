@@ -670,6 +670,20 @@ function App() {
         <a className="wallet-footer-link" href="https://th3chain.cloud">
           Back to main page
         </a>
+        <div className="social-strip" aria-label="TH3Chain social links">
+          <a href="https://x.com/TH3ChainCloud" target="_blank" rel="noreferrer">
+            <span>X</span>
+            X / Twitter
+          </a>
+          <a href="https://t.me/TH3ChainCloud" target="_blank" rel="noreferrer">
+            <span>TG</span>
+            Telegram
+          </a>
+          <a href="mailto:contact@th3chain.cloud">
+            <span>@</span>
+            Contact
+          </a>
+        </div>
       </footer>
     </div>
   )
