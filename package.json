@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:chrome": "tsc -b && vite build --config vite.extension.config.ts && cp extension/chrome/manifest.json extension/chrome/dist/ && mkdir -p extension/chrome/dist/icons && cp extension/chrome/icons/* extension/chrome/dist/icons/"
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",

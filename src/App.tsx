@@ -38,6 +38,9 @@ function App() {
   const [isSending, setIsSending] = useState(false)
   const [isLoadingTxs, setIsLoadingTxs] = useState(false)
   const [lastTxid, setLastTxid] = useState('')
+  const [addressCopied, setAddressCopied] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const isChromeExtension = new URLSearchParams(window.location.search).get('extension') === 'chrome'
   const [showSeed, setShowSeed] = useState(false)
 
   const receiveLink = address
@@ -47,6 +50,8 @@ function App() {
   const amount = Number(sendAmount)
   const maxSend = Math.max(balance - TX_FEE_TH3, 0)
   const totalSendCost = Number.isFinite(amount) && amount > 0 ? amount + TX_FEE_TH3 : TX_FEE_TH3
+
+  const shortAddress = (value: string) => value ? `${value.slice(0, 10)}...${value.slice(-8)}` : ''
 
   const formatTH3 = (value: number, maxDecimals = 8) => {
     const safeValue = Number.isFinite(value) ? value : 0
@@ -248,28 +253,60 @@ function App() {
             </div>
             <h1>Wallet</h1>
           </div>
+
+          {isUnlocked && address && (
+            <div className="extension-address-bar">
+              <span title={address}>{shortAddress(address)}</span>
+              <button
+                type="button"
+                className={addressCopied ? 'copied' : ''}
+                onClick={async () => {
+                  await navigator.clipboard.writeText(address)
+                  setAddressCopied(true)
+                  window.setTimeout(() => setAddressCopied(false), 1200)
+                }}
+              >
+                {addressCopied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+
+          {isUnlocked && (
+            <div className="nav-bar">
+              <span
+                className={activeTab === 'send' ? 'active' : ''}
+                onClick={() => setActiveTab('send')}
+              >
+                Send
+              </span>
+
+              <span
+                className={activeTab === 'wallet' ? 'active' : ''}
+                onClick={() => setActiveTab('wallet')}
+              >
+                Wallet
+              </span>
+
+              <span
+                className={activeTab === 'txs' ? 'active' : ''}
+                onClick={() => setActiveTab('txs')}
+              >
+                History
+              </span>
+
+              <span
+                className={activeTab === 'sec' ? 'active' : ''}
+                onClick={() => setActiveTab('sec')}
+              >
+                Security
+              </span>
+            </div>
+          )}
         </header>
 
-        {error && (
+        {error && (!isChromeExtension || !isUnlocked) && (
           <div className="error-msg">
             {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="success-msg">
-            {success}
-            {lastTxid && (
-              <div style={{ marginTop: 8 }}>
-                <a
-                  href={`${EXPLORER_TX_BASE}/${lastTxid}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View transaction
-                </a>
-              </div>
-            )}
           </div>
         )}
 
@@ -292,7 +329,7 @@ function App() {
             ) : (
               <>
                 {view === 'login' && (
-                  <>
+                  <div className="setup-actions">
                     <button
                       onClick={() => {
                         setTempSeed(bip39.generateMnemonic())
@@ -309,7 +346,7 @@ function App() {
                     >
                       Import
                     </button>
-                  </>
+                  </div>
                 )}
 
                 {view === 'create-show' && (
@@ -377,35 +414,7 @@ function App() {
           </div>
         ) : (
           <div>
-            <div className="nav-bar">
-              <span
-                className={activeTab === 'send' ? 'active' : ''}
-                onClick={() => setActiveTab('send')}
-              >
-                Send
-              </span>
 
-              <span
-                className={activeTab === 'wallet' ? 'active' : ''}
-                onClick={() => setActiveTab('wallet')}
-              >
-                Wallet
-              </span>
-
-              <span
-                className={activeTab === 'txs' ? 'active' : ''}
-                onClick={() => setActiveTab('txs')}
-              >
-                History
-              </span>
-
-              <span
-                className={activeTab === 'sec' ? 'active' : ''}
-                onClick={() => setActiveTab('sec')}
-              >
-                Security
-              </span>
-            </div>
 
             {activeTab === 'wallet' && (
               <>
@@ -481,6 +490,27 @@ function App() {
 
             {activeTab === 'send' && (
               <>
+                {error && isChromeExtension && (
+                  <div className="send-error-msg">
+                    {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="send-success-msg">
+                    <span>{success}</span>
+                    {lastTxid && (
+                      <a
+                        href={`${EXPLORER_TX_BASE}/${lastTxid}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View transaction
+                      </a>
+                    )}
+                  </div>
+                )}
+
                 <input
                   type="text"
                   placeholder="Recipient Address"
@@ -653,15 +683,34 @@ function App() {
               </>
             )}
 
-            <button
-              className="reset-btn"
-              onClick={() => {
-                localStorage.clear()
-                window.location.reload()
-              }}
-            >
-              Delete Wallet
-            </button>
+            {!confirmDelete ? (
+              <button
+                className="reset-btn"
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete Wallet
+              </button>
+            ) : (
+              <div className="delete-confirm">
+                <button
+                  type="button"
+                  className="delete-cancel-btn"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="delete-confirm-btn"
+                  onClick={() => {
+                    localStorage.clear()
+                    window.location.reload()
+                  }}
+                >
+                  Confirm
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
