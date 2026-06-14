@@ -2159,3 +2159,29 @@ html[data-extension="chrome"] .send-success-msg a {
   font-size: 12px !important;
   font-weight: 900 !important;
 }
+
+/* Hide extension-only address bar on normal web wallet */
+.extension-address-bar {
+  display: none;
+}
+
+html[data-extension="chrome"] .extension-address-bar {
+  display: flex !important;
+}
+
+/* Web wallet: keep logo/title above tabs */
+html:not([data-extension="chrome"]) header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 22px !important;
+}
+
+html:not([data-extension="chrome"]) .wallet-header-brand {
+  width: 100% !important;
+  justify-content: center !important;
+}
+
+html:not([data-extension="chrome"]) .nav-bar {
+  width: 100% !important;
+}
